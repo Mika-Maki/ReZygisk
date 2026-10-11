@@ -863,3 +863,31 @@ int save_mns_fd(int pid, enum MountNamespaceState mns_state, struct root_impl im
 
   return ns_fd;
 }
+
+/* INFO: Feature marker, checked by the daemon (which runs as root and can read
+           /data/adb) and forwarded to the loader through the process flags, as the
+           loader itself runs inside the app process and cannot access that path. */
+/* INFO: The runtime directory gets recreated on boot, so the module directory is
+           checked first as it survives (it is only replaced on module updates). */
+static const char *const rezygisk_early_unload_markers[] = {
+  "/data/adb/modules/rezygisk/unload_modules_early",
+  "/data/adb/rezygisk/unload_modules_early"
+};
+
+bool unload_modules_early_enabled(void) {
+  static int cached = -1;
+
+  if (cached == -1) {
+    cached = 0;
+
+    for (size_t i = 0; i < sizeof(rezygisk_early_unload_markers) / sizeof(rezygisk_early_unload_markers[0]); i++) {
+      if (access(rezygisk_early_unload_markers[i], F_OK) == 0) {
+        cached = 1;
+
+        break;
+      }
+    }
+  }
+
+  return cached == 1;
+}

@@ -443,6 +443,9 @@ void zygiskd_start(char *restrict argv[]) {
           if (uid_should_umount(uid, (const char *const)process)) {
             flags |= PROCESS_ON_DENYLIST;
           }
+          if (unload_modules_early_enabled()) {
+            flags |= PROCESS_UNLOAD_MODULES_EARLY;
+          }
         }
 
         switch (impl.impl) {

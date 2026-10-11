@@ -153,15 +153,10 @@ static bool enable_unloader = false;
          Trade-off: post...Specialize callbacks of those modules are not delivered in that
            process, as their code is gone by then.
 */
-#define REZYGISK_EARLY_UNLOAD_MARKER "/data/adb/rezygisk/unload_modules_early"
-
-static bool unload_modules_early(void) {
-  static int cached = -1;
-
-  if (cached == -1) cached = access(REZYGISK_EARLY_UNLOAD_MARKER, F_OK) == 0 ? 1 : 0;
-
-  return cached == 1;
-}
+/* INFO: Set from the process flags sent by ReZygiskd (which reads the feature marker
+           as root), because this library runs inside the app process and cannot read
+           /data/adb itself. */
+static bool unload_modules_early_flag = false;
 
 static size_t unload_module_libraries_early(void) {
   size_t unloaded = 0;
@@ -355,7 +350,7 @@ DCL_HOOK_FUNC(int, pthread_attr_setstacksize, void *target, size_t size) {
   if (gettid() != getpid()) return res;
 
   if (should_unmap_zygisk) {
-    if (unload_modules_early()) {
+    if (unload_modules_early_flag) {
       size_t unloaded = unload_module_libraries_early();
 
       LOGD("Unloaded %zu/%zu module libraries before app code", unloaded, zygisk_module_length);
@@ -1134,6 +1129,10 @@ static void rz_app_specialize_pre(struct zygisk_context *ctx) {
   }
 
   ctx->info_flags = rezygiskd_get_process_flags(uid, ctx->process);
+
+  if ((ctx->info_flags & PROCESS_UNLOAD_MODULES_EARLY) == PROCESS_UNLOAD_MODULES_EARLY) {
+    unload_modules_early_flag = true;
+  }
   /* INFO: To ensure we are really using a clean mount namespace, we use
               the first process it as reference for clean mount namespace,
               before it even does something, so that it will be clean yet

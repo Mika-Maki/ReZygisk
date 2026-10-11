@@ -97,4 +97,7 @@ void stringify_root_impl_name(struct root_impl impl, char *restrict output);
 
 int save_mns_fd(int pid, enum MountNamespaceState mns_state, struct root_impl impl);
 
+/* INFO: Whether module libraries should be unloaded as early as possible (see loader). */
+bool unload_modules_early_enabled(void);
+
 #endif /* UTILS_H */
