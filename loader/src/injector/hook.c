@@ -137,6 +137,52 @@ size_t zygisk_module_length = 0;
 static bool should_unmap_zygisk = false;
 static bool enable_unloader = false;
 
+/* INFO: Early module unloading.
+
+         By default, ReZygisk keeps module libraries resident in the process for its whole
+           lifetime (they are only unloaded when a module requests DLCLOSE_MODULE_LIBRARY,
+           which happens after post...Specialize).
+
+         That leaves a full module image — code, build-id, string tables — readable inside
+           the process, which is exactly what memory-dumping detections look for.
+
+         When the marker file below exists, module libraries are unloaded at the very same
+           point libzygisk.so unmaps itself (i.e. as close as possible to "before the app
+           can execute code"), so nothing of the module is left to be observed.
+
+         Trade-off: post...Specialize callbacks of those modules are not delivered in that
+           process, as their code is gone by then.
+*/
+#define REZYGISK_EARLY_UNLOAD_MARKER "/data/adb/rezygisk/unload_modules_early"
+
+static bool unload_modules_early(void) {
+  static int cached = -1;
+
+  if (cached == -1) cached = access(REZYGISK_EARLY_UNLOAD_MARKER, F_OK) == 0 ? 1 : 0;
+
+  return cached == 1;
+}
+
+static size_t unload_module_libraries_early(void) {
+  size_t unloaded = 0;
+
+  for (size_t i = 0; i < zygisk_module_length; i++) {
+    struct rezygisk_module *m = &zygisk_modules[i];
+
+    if (!m->lib.img) continue;
+
+    if (!csoloader_unload(&m->lib)) {
+      LOGE("Failed to unload module library early");
+
+      continue;
+    }
+
+    unloaded++;
+  }
+
+  return unloaded;
+}
+
 /* INFO: Helper function to add to PLT hook list */
 static bool plt_hook_list_add(const char *lib_path, const char *symbol, void *new_func, void **backup) {
   struct plt_hook_entry *new_plt_hook_list = realloc(plt_hook_list, (plt_hook_list_count + 1) * sizeof(struct plt_hook_entry));
@@ -309,6 +355,16 @@ DCL_HOOK_FUNC(int, pthread_attr_setstacksize, void *target, size_t size) {
   if (gettid() != getpid()) return res;
 
   if (should_unmap_zygisk) {
+    if (unload_modules_early()) {
+      size_t unloaded = unload_module_libraries_early();
+
+      LOGD("Unloaded %zu/%zu module libraries before app code", unloaded, zygisk_module_length);
+
+      /* INFO: The module libraries are gone, hence post...Specialize must not be
+                 forwarded to them anymore. */
+      zygisk_module_length = 0;
+    }
+
     unhook_functions();
 
     csoloader_deinit();
