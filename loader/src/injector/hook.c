@@ -1226,7 +1226,8 @@ static void rz_cleanup(struct zygisk_context *ctx) {
 
   if (!is_zygote_child(ctx)) return;
 
-  should_unmap_zygisk = true;
+  /* TEST BUILD: 关闭自卸载，验证 Duck Detector 的 exit-handler 残留是否来自 libzygisk munmap */
+  should_unmap_zygisk = false;
 
   /* INFO: Unhook JNI methods */
   for (size_t i = 0; i < jni_hook_list_count; i++) {
