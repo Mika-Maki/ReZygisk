@@ -3,4 +3,4 @@
 	url = https://github.com/Mika-Maki/PLTI
 [submodule "CSOLoader"]
 	path = loader/src/external/csoloader
-	url = https://github.com/ThePedroo/CSOLoader
+	url = https://github.com/Mika-Maki/CSOLoader
